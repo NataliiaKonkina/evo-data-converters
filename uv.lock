@@ -908,7 +908,7 @@ dev = [{ name = "pytest" }]
 
 [[package]]
 name = "evo-data-converters-image"
-version = "0.1.0"
+version = "0.1.1"
 source = { editable = "packages/image" }
 dependencies = [
     { name = "evo-data-converters-common" },
@@ -933,7 +933,7 @@ requires-dist = [
     { name = "evo-objects", specifier = ">=0.3.3" },
     { name = "evo-schemas", specifier = ">=2025.12.15" },
     { name = "evo-sdk-common", specifier = ">=0.5.12" },
-    { name = "numpy", specifier = "<=1.26.4" },
+    { name = "numpy", specifier = ">=1.26.3,<3" },
     { name = "pillow" },
     { name = "pyarrow" },
     { name = "pydantic" },
