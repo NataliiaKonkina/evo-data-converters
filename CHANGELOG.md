@@ -1,5 +1,22 @@
 # Changelog
 
+## evo-data-converters-image@v0.1.2
+### What's Changed
+#### evo-data-converters-image
+* Add configurable output_dir parameter to convert_image_to_grid
+
+**Full Changelog**: https://github.com/SeequentEvo/evo-data-converters/compare/evo-data-converters-image@v0.1.1...evo-data-converters-image@v0.1.2
+
+## evo-data-converters-image@v0.1.1
+### What's Changed
+#### evo-data-converters-image
+* Add ImageGridConverter for converting images (JPEG, PNG, TIFF) to Regular 2D Grid format
+* Add comprehensive unit tests for image-to-grid conversion with grayscale support
+* Add sample output demonstrating image conversion with parquet data storage
+* Support for configurable origin, cell size, CRS, and custom attributes
+
+**Full Changelog**: https://github.com/SeequentEvo/evo-data-converters/compare/evo-data-converters-image@v0.1.0...evo-data-converters-image@v0.1.1
+
 ## evo-data-converters-duf@v0.2.2
 ### What's Changed
 #### evo-data-converters-duf

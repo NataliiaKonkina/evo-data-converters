@@ -305,6 +305,7 @@ def convert_image_to_grid(
     evo_workspace_metadata: Optional[EvoWorkspaceMetadata] = None,
     service_manager_widget: Optional["ServiceManagerWidget"] = None,
     upload_path: str = "",
+    output_dir: str = "./parquet_arrays",
     publish_objects: bool = True,
     overwrite_existing_objects: bool = False,
 ) -> list:
@@ -328,7 +329,7 @@ def convert_image_to_grid(
     else:
         # Offline path: local stub (no credentials); still writes a local parquet and computes hash
         object_service_client = None
-        data_client = _LocalObjectDataClientStub(output_dir="./parquet_arrays")
+        data_client = _LocalObjectDataClientStub(output_dir=output_dir)
 
     # Convert (this will write parquet via data_client: real or stub)
     converter = ImageGridConverter(data_client, output_parquet=False)
