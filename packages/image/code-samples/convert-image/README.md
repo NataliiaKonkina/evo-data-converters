@@ -154,15 +154,12 @@ The parquet file contains a single column named `"values"` with:
 The converter follows this pattern for pixel extraction:
 
 ```python
-for y in range(height):
-    for x in range(width):
-        value = pixel_array[y, x]
-        cell_values.append(value)
+cell_values = np.flipud(pixel_array).ravel(order="C")
 ```
 
 This creates a row-major flattened array where:
-- First `width` values = top row of image
-- Next `width` values = second row
+- First `width` values = bottom row of image
+- Next `width` values = second row from bottom
 - And so on...
 
 ## Coordinate Reference System

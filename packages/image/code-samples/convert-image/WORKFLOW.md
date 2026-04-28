@@ -19,11 +19,9 @@ INPUT: Image File (JPEG, PNG, TIFF, BMP, GIF, etc.)
   │
   ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
-│ Step 2: Extract Pixel Values (Row-Major Order)                          │
-│   for y in range(height):                                               │
-│       for x in range(width):                                            │
-│           value = pixel_array[y, x]  # 0-255 grayscale                  │
-│           cell_values.append(float(value))                              │
+│ Step 2: Extract Pixel Values (Bottom-Row-First, Row-Major)             │
+│   pixel_array = np.array(grayscale_img, dtype=np.float64)              │
+│   cell_values = np.flipud(pixel_array).ravel(order="C")               │
 │                                                                          │
 │   Result: Flattened 1D array [width × height] of float64 values         │
 └─────────────────────────────────────────────────────────────────────────┘

@@ -93,15 +93,10 @@ def convert_image_to_grid_json(
 
     print(f"Image size: {width} x {height} pixels")
 
-    # Extract pixel values (row-major order)
+    # Extract pixel values in row-major order starting from bottom row
+    # so index 0 maps to the grid origin (bottom-left).
     pixel_array = np.array(grayscale_img, dtype=np.float64)
-    cell_values = []
-    for y in range(height):
-        for x in range(width):
-            value = pixel_array[y, x]
-            cell_values.append(value)
-
-    cell_values = np.array(cell_values, dtype=np.float64)
+    cell_values = np.flipud(pixel_array).ravel(order="C")
     print(f"Extracted {len(cell_values)} cell values")
 
     # Create parquet file

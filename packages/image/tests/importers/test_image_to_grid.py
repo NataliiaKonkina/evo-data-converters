@@ -92,8 +92,23 @@ def test_read_image_as_grayscale(sample_image: Tuple[Path, int, int], mock_data_
     assert height == expected_height
     assert len(cell_values) == width * height
     assert cell_values.dtype == np.float64
-    # Row-major: first row should be strictly increasing for our gradient
+    # Row-major after vertical flip: first row should still be strictly increasing.
     assert np.all(np.diff(cell_values[:width]) > 0)
+
+
+def test_read_image_uses_bottom_left_as_origin(sample_image: Tuple[Path, int, int], mock_data_client: _MockDataClient):
+    """The first flattened row must correspond to the bottom image row."""
+    image_path, width, height = sample_image
+    converter = ImageGridConverter(mock_data_client)
+
+    cell_values, read_width, read_height = converter._read_image_as_grayscale(str(image_path))
+
+    assert read_width == width
+    assert read_height == height
+
+    # Fixture image is a simple ramp: arr[y, x] = y * width + x.
+    expected_bottom_row = np.arange((height - 1) * width, height * width, dtype=np.float64)
+    np.testing.assert_array_equal(cell_values[:width], expected_bottom_row)
 
 
 def test_convert_basic_grid(sample_image: Tuple[Path, int, int], mock_data_client: _MockDataClient):
