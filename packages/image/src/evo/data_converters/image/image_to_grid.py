@@ -136,6 +136,8 @@ class ImageGridConverter:
 
         :param image_path: Path to the image file
         :return: Tuple of (flattened pixel_values (float64), width, height)
+             Pixel values are flattened row-major starting from the bottom row so
+             index 0 maps to the grid origin (bottom-left convention).
         """
         logger.info(f"Reading image file: {image_path}")
 
@@ -144,8 +146,9 @@ class ImageGridConverter:
             width, height = grayscale_img.size
             logger.info(f"Image dimensions: {width}x{height}")
 
-            # Vectorized conversion to 1D float64 (row-major)
-            cell_values = np.asarray(grayscale_img, dtype=np.float64).ravel(order="C")
+            # Flip vertically so flattened values start at bottom-left (grid origin).
+            pixel_array = np.asarray(grayscale_img, dtype=np.float64)
+            cell_values = np.flipud(pixel_array).ravel(order="C")
 
         return cell_values, width, height
 
