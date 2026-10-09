@@ -48,13 +48,14 @@ class MeshBuilder:
         Represents one set of attributes for the mesh parts.
         """
 
-        def __init__(self, nan_def, data_type: shapefile.FieldType):
+        def __init__(self, nan_def, data_type: shapefile.FieldType, numeric_is_float: bool = False):
             """
             :param nan_def: The value of NaN for this data type.
             :param data_type: The pyshp data type of this attruibute.
             """
             self.nan_def = nan_def
             self.data_type = data_type
+            self.numeric_is_float = numeric_is_float
             self.data = []
 
     data_client: ObjectDataClient
@@ -75,8 +76,9 @@ class MeshBuilder:
         self.mesh_part_attributes = {}
 
         for field in fields:
+            numeric_is_float = field.field_type == shapefile.FieldType.N and field.decimal > 0
             self.mesh_part_attributes[field.name] = self._Mesh_Part_Data(
-                self._get_nan_def(field.field_type), field.field_type
+                self._get_nan_def(field.field_type, numeric_is_float), field.field_type, numeric_is_float
             )
 
     def add_shape_record(self, shape_record: shapefile.ShapeRecord):
@@ -122,6 +124,8 @@ class MeshBuilder:
             # Convert dates to a microsecond timestamp.
             if self.mesh_part_attributes[key].data_type == shapefile.FieldType.D:
                 value = date_to_evo_timestamp(value)
+            elif self.mesh_part_attributes[key].data_type == shapefile.FieldType.N and value is not None:
+                value = self._normalize_numeric_value(value, self.mesh_part_attributes[key])
 
             default = self.mesh_part_attributes[key].nan_def
             self.mesh_part_attributes[key].data += [value if value is not None else default]
@@ -206,7 +210,7 @@ class MeshBuilder:
         assert len(points) == len(z), "Mismatched number of x, y, and z coordinates for shapefile points."
         return [points[i] + (z[i],) for i in range(len(points))]
 
-    def _get_nan_def(self, field_type: shapefile.FieldType):
+    def _get_nan_def(self, field_type: shapefile.FieldType, numeric_is_float: bool = False):
         """
         Get an appropriate default NaN definition for the given pyshp FieldType.
 
@@ -216,6 +220,8 @@ class MeshBuilder:
         """
         match field_type:
             case shapefile.FieldType.N:
+                if numeric_is_float:
+                    return -1.0e38
                 return iinfo("int64").min
             case shapefile.FieldType.F:
                 return float("nan")
@@ -223,6 +229,15 @@ class MeshBuilder:
                 return iinfo("int64").min
             case _:
                 return None
+
+    def _normalize_numeric_value(self, value, part: _Mesh_Part_Data) -> int | float:
+        """Normalize DBF numeric values based on field precision metadata."""
+        try:
+            if part.numeric_is_float:
+                return float(value)
+            return int(value)
+        except (TypeError, ValueError):
+            return part.nan_def
 
     def _attribute_from_mesh_part(self, field_name: str, part: _Mesh_Part_Data) -> OneOfAttribute_V1_2_0_Item:
         """
@@ -235,6 +250,20 @@ class MeshBuilder:
         """
         match part.data_type:
             case shapefile.FieldType.N:
+                if part.numeric_is_float:
+                    nan_description = NanContinuous_V1_0_1(values=[part.nan_def])
+                    schema = pa.schema([("values", pa.float64())])
+                    table = pa.table({"values": part.data}, schema=schema)
+                    data_hash = self._create_parquet_file(table)
+                    values = FloatArray1_V1_0_1(data=data_hash, length=len(part.data), data_type="float64")
+                    return ContinuousAttribute_V1_1_0(
+                        name=field_name,
+                        key=data_hash,
+                        attribute_description=None,
+                        nan_description=nan_description,
+                        values=values,
+                    )
+
                 nan_description = NanCategorical_V1_0_1(values=[part.nan_def])
                 schema = pa.schema([("values", pa.int64())])
                 table = pa.table({"values": part.data}, schema=schema)
@@ -289,7 +318,7 @@ class MeshBuilder:
             case _:
                 return None
 
-    def _create_parquet_file(self, table: pa.table) -> str:
+    def _create_parquet_file(self, table: pa.Table) -> str:
         """
         Writes a parquet file from the given table using the data client.
 

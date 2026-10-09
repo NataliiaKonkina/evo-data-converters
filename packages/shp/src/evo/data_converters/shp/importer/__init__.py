@@ -9,8 +9,9 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from .shp_to_evo import convert_shp
+from .shp_to_evo import convert_shp, get_output_schema
 
 __all__ = [
     "convert_shp",
+    "get_output_schema",
 ]

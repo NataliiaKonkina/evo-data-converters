@@ -37,7 +37,21 @@ There are multiple shape types which can be used to define a shapefile, though a
 
 The python [pyshp](https://pypi.org/project/pyshp/) package is used to work with shapefiles.
 
-The SHP converter currently only supports importing multipatch shapefiles which do not contain any rings. These are translated to the triangle-mesh schema and published to an Evo workspace. NULL shapes are discarded.
+The SHP converter supports these geometry families:
+
+* `Multipatch` -> Evo TriangleMesh
+* `PolyLine`, `PolyLineM`, `PolyLineZ` -> Evo LineSegments
+* `Polygon`, `PolygonM`, `PolygonZ` -> Evo LineSegments
+* `Point`, `PointM`, `PointZ` -> Evo Pointset
+* `MultiPoint`, `MultiPointM`, `MultiPointZ` -> Evo Pointset
+
+Current behavior notes:
+
+* `NULL` shapes are discarded.
+* Multipatch rings are not currently supported.
+* `M` values are preserved as a point attribute named `M` for `PointM`, `PointZ`, `MultiPointM`, and `MultiPointZ`.
+* `Z` values are preserved in coordinates for `PointZ` and `MultiPointZ`.
+* For multipoint records, per-record DBF attributes are repeated for each generated point location.
 
 ### Publish geoscience objects from ESRI Shapefile files
 

@@ -191,7 +191,12 @@ def test_prj(sample_shp: Path, prj: Path, parquet_path: Path):
 
     triangle_mesh: TriangleMesh_V2_2_0 = triangle_meshes[0]
 
-    assert triangle_mesh.coordinate_reference_system.ogc_wkt == expected_prj
+    crs = triangle_mesh.coordinate_reference_system
+    if hasattr(crs, "ogc_wkt"):
+        assert crs.ogc_wkt == expected_prj
+    else:
+        assert hasattr(crs, "epsg_code")
+        assert crs.epsg_code == 4326
 
 
 def test_parquet_output(sample_shp: Path, parquet_path: Path):
@@ -224,3 +229,77 @@ def test_parquet_output(sample_shp: Path, parquet_path: Path):
         expected += [parquet_path / f"{attr.key}.parquet" for attr in triangle_mesh.triangles.indices.attributes]
 
     assert all(Path(file).exists for file in expected)
+
+
+def test_triangle_mesh_numeric_decimal_field_is_continuous(tmp_path: Path, parquet_path: Path):
+    shp_path = tmp_path / "mesh_numeric_decimal"
+    with shapefile.Writer(shp_path, shapeType=shapefile.MULTIPATCH) as writer:
+        writer.field("SCORE", shapefile.FieldType.N, decimal=2)
+        writer.multipatch(
+            [
+                [[0, 0, 0], [1, 0, 0], [0, 1, 0]],
+            ],
+            [shapefile.TRIANGLE_STRIP],
+        )
+        writer.record(SCORE=3.14)
+
+    triangle_meshes = convert_shp(
+        filepath=shp_path,
+        filepath_shx=shp_path.with_suffix(".shx"),
+        filepath_dbf=shp_path.with_suffix(".dbf"),
+        upload_path=parquet_path,
+        publish_objects=False,
+        overwrite_existing_objects=True,
+    )
+
+    triangle_mesh: TriangleMesh_V2_2_0 = triangle_meshes[0]
+    score_attr = next(attr for attr in triangle_mesh.parts.attributes if attr.name == "SCORE")
+    assert score_attr.attribute_type == "scalar"
+
+
+def test_crs_override(sample_shp: Path, parquet_path: Path):
+    """Test that crs_override takes precedence over .prj file."""
+    path, _, _, _, _ = sample_shp
+
+    # Test with EPSG override (no .prj file)
+    triangle_meshes = convert_shp(
+        filepath=path,
+        filepath_shx=path.with_suffix(".shx"),
+        filepath_dbf=path.with_suffix(".dbf"),
+        crs_override={"epsg_code": 3857},
+        upload_path=parquet_path,
+        publish_objects=False,
+        overwrite_existing_objects=True,
+    )
+
+    assert len(triangle_meshes) == 1
+    triangle_mesh: TriangleMesh_V2_2_0 = triangle_meshes[0]
+
+    crs = triangle_mesh.coordinate_reference_system
+    assert hasattr(crs, "epsg_code")
+    assert crs.epsg_code == 3857
+
+
+def test_crs_override_takes_precedence_over_prj(sample_shp: Path, prj: Path, parquet_path: Path):
+    """Test that crs_override takes precedence over .prj file."""
+    path, _, _, _, _ = sample_shp
+    prj_file, _ = prj
+
+    # Test that override takes precedence over .prj file
+    triangle_meshes = convert_shp(
+        filepath=path,
+        filepath_shx=path.with_suffix(".shx"),
+        filepath_dbf=path.with_suffix(".dbf"),
+        filepath_prj=prj_file,  # .prj file specifies EPSG 4326
+        crs_override={"epsg_code": 3857},  # But override says 3857
+        upload_path=parquet_path,
+        publish_objects=False,
+        overwrite_existing_objects=True,
+    )
+
+    assert len(triangle_meshes) == 1
+    triangle_mesh: TriangleMesh_V2_2_0 = triangle_meshes[0]
+
+    crs = triangle_mesh.coordinate_reference_system
+    assert hasattr(crs, "epsg_code")
+    assert crs.epsg_code == 3857  # Should use override, not .prj file

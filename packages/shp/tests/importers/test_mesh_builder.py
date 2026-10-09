@@ -145,8 +145,8 @@ def shapefile_with_point_data(tmp_path: Path) -> shapefile.Reader:
 
 def test_add_triangle_strip(triangle_strip: tuple[shapefile.Reader, int, int, int], data_client: LocalDataClient):
     reader, expected_field_num, expected_triangle_num, expected_vertex_num = triangle_strip
+    expected_shape_num = len(reader.shapes())
     fields = reader.fields[1:]
-    expected_shape_num = reader.numShapes
     mesh_builder = MeshBuilder(data_client=data_client, fields=fields)
 
     for sr in reader.iterShapeRecords():
@@ -171,9 +171,9 @@ def test_add_triangle_strip(triangle_strip: tuple[shapefile.Reader, int, int, in
 
 def test_add_triangle_fan(triangle_fan: tuple[shapefile.Reader, int, int, int], data_client: LocalDataClient):
     reader, expected_field_num, expected_triangle_num, expected_vertex_num = triangle_fan
+    expected_shape_num = len(reader.shapes())
     # Skip DeletionFlag field
     fields = reader.fields[1:]
-    expected_shape_num = reader.numShapes
     mesh_builder = MeshBuilder(data_client=data_client, fields=fields)
 
     for sr in reader.iterShapeRecords():

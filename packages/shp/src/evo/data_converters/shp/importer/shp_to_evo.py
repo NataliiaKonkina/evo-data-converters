@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Optional
 
 from evo.data_converters.common import (
     EvoWorkspaceMetadata,
+    crs_from_any,
     create_evo_object_service_and_data_client,
     publish_geoscience_objects_sync,
 )
@@ -20,10 +21,36 @@ from evo.data_converters.shp.importer.implementation.local_data import LocalData
 from evo.data_converters.shp.importer.implementation.prj_parser import prj_to_crs
 from evo.data_converters.shp.importer.implementation.shp_parser import ShpParser
 from evo.objects.data import ObjectMetadata
+from evo_schemas.objects import LineSegments_V2_1_0
+from evo_schemas.objects.pointset import Pointset_V1_3_0
 from evo_schemas.objects.triangle_mesh import TriangleMesh_V2_2_0
 
 if TYPE_CHECKING:
     from evo.notebooks import ServiceManagerWidget
+
+
+class _PublishObjectAdapter:
+    """Wraps a geoscience object and omits `uuid` from payload when it is None."""
+
+    def __init__(self, obj):
+        self._obj = obj
+
+    @property
+    def uuid(self):
+        return getattr(self._obj, "uuid", None)
+
+    @uuid.setter
+    def uuid(self, value):
+        setattr(self._obj, "uuid", value)
+
+    def as_dict(self):
+        payload = self._obj.as_dict()
+        if getattr(self._obj, "uuid", None) is None:
+            payload.pop("uuid", None)
+        return payload
+
+    def __getattr__(self, item):
+        return getattr(self._obj, item)
 
 
 def convert_shp(
@@ -35,15 +62,16 @@ def convert_shp(
     filepath_sbn: Optional[str] = None,
     filepath_sbx: Optional[str] = None,
     filepath_xml: Optional[str] = None,
+    crs_override: Optional[dict] = None,
     evo_workspace_metadata: Optional[EvoWorkspaceMetadata] = None,
     service_manager_widget: Optional["ServiceManagerWidget"] = None,
     tags: Optional[dict[str, str]] = None,
     upload_path: str = "",
     publish_objects: bool = True,
     overwrite_existing_objects: bool = False,
-) -> list[TriangleMesh_V2_2_0] | list[ObjectMetadata]:
+) -> list[TriangleMesh_V2_2_0 | LineSegments_V2_1_0 | Pointset_V1_3_0] | list[ObjectMetadata]:
     """
-    Convert an ESRI shapefile (.shp, .shx, and .dbf) to a triangle-mesh geoscience object.
+    Convert an ESRI shapefile (.shp, .shx, and .dbf) to a geoscience object.
 
     :param filepath: Path to the .shp geometry file.
     :param filepath_shx: Path to the .shx spatial index file.
@@ -55,6 +83,8 @@ def convert_shp(
     :param filepath_sbn: (Optional) Path to the .sbn spatial index file. Accepted but not currently used.
     :param filepath_sbx: (Optional) Path to the .sbx spatial index file. Accepted but not currently used.
     :param filepath_xml: (Optional) Path to the .shp.xml metadata file. Accepted but not currently used.
+    :param crs_override: (Optional) Override for CRS, e.g. ``{"epsg_code": 4326}``. When provided,
+     this takes precedence over the .prj file.
     :param evo_workspace_metadata: (Optional) Evo workspace metadata.
     :param service_manager_widget: (Optional) Service Manager Widget for use in jupyter notebooks.
     :param tags: (Optional) Dict of tags to add to the Geoscience Object(s).
@@ -62,7 +92,7 @@ def convert_shp(
     :param publish_objects: (Optional) Set False to prevent publishing and instead return Geoscience models.
     :param overwrite_existing_objects: (Optional) Set True to overwrite any existing object at the destiation path.
 
-    :return: list[ObjectMetadata] if publish_objects is true, otherwise list[TriangleMesh_V2_2_0]
+    :return: list[ObjectMetadata] if publish_objects is true, otherwise list of converted geoscience objects.
 
     :raise MissingConnectionDetailsError: If no connections details could be derived.
     :raise ConflictingConnectionDetailsError: If both evo_workspace_metadata and service_manager_widget present.
@@ -73,7 +103,7 @@ def convert_shp(
     """
     geoscience_objects = []
 
-    if publish_objects or evo_workspace_metadata or service_manager_widget:
+    if publish_objects:
         object_service_client, data_client = create_evo_object_service_and_data_client(
             evo_workspace_metadata=evo_workspace_metadata, service_manager_widget=service_manager_widget
         )
@@ -87,7 +117,11 @@ def convert_shp(
         **(tags or {}),
     }
 
-    crs = prj_to_crs(filepath_prj)
+    # Resolve CRS: override takes precedence, then .prj file, then unspecified
+    if crs_override:
+        crs = crs_from_any(crs_override.get("epsg_code")) if "epsg_code" in crs_override else crs_from_any(None)
+    else:
+        crs = prj_to_crs(filepath_prj)
 
     parser = ShpParser(
         path=filepath,
@@ -101,15 +135,44 @@ def convert_shp(
         sbx_path=filepath_sbx,
         xml_path=filepath_xml,
     )
-    mesh = parser.parse_shp()
+    geoscience_object = parser.parse_shp()
 
-    geoscience_objects.append(mesh)
+    geoscience_objects.append(geoscience_object)
 
     objects_metadata = None
     if publish_objects:
         print("Publishing Shapefile")
+
+        # Preserve original models and sanitize publish payload via adapters.
+        publish_models = [_PublishObjectAdapter(obj) for obj in geoscience_objects]
+
         objects_metadata = publish_geoscience_objects_sync(
-            geoscience_objects, object_service_client, data_client, upload_path, overwrite_existing_objects
+            publish_models, object_service_client, data_client, upload_path, overwrite_existing_objects
         )
 
     return objects_metadata if objects_metadata else geoscience_objects
+
+
+def get_output_schema(
+    filepath: str,
+    filepath_shx: str,
+    filepath_dbf: str,
+    filepath_prj: Optional[str] = None,
+    filepath_cpg: Optional[str] = None,
+    filepath_sbn: Optional[str] = None,
+    filepath_sbx: Optional[str] = None,
+    filepath_xml: Optional[str] = None,
+) -> type[TriangleMesh_V2_2_0 | LineSegments_V2_1_0 | Pointset_V1_3_0]:
+    parser = ShpParser(
+        path=filepath,
+        shx_path=filepath_shx,
+        dbf_path=filepath_dbf,
+        data_client=None,
+        crs=None,
+        tags=None,
+        cpg_path=filepath_cpg,
+        sbn_path=filepath_sbn,
+        sbx_path=filepath_sbx,
+        xml_path=filepath_xml,
+    )
+    return parser.get_output_schema_type()
